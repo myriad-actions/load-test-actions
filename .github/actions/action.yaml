@@ -68,9 +68,10 @@ runs:
 
     - name: Run Load Test
       shell: bash
+      working-directory: ./action_repo
       run: |
         k6 run \
-          action_repo/templates/${{ inputs.test_type }}.js
+          templates/${{ inputs.test_type }}.js
 
     - name: Send Email Notification
       if: ${{ inputs.email_notify == 'true' }}
