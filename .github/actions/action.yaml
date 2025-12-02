@@ -70,7 +70,7 @@ runs:
       shell: bash
       run: |
         k6 run \
-          templates/${{ inputs.test_type }}.js
+          action_repo/templates/${{ inputs.test_type }}.js
 
     - name: Send Email Notification
       if: ${{ inputs.email_notify == 'true' }}
