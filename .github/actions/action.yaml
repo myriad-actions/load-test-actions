@@ -42,6 +42,7 @@ runs:
     
     - name: Validate scenario file and its executable
       shell: bash
+      id: validation_step
       run: |
         if [ ! -f "caller_repo/${{ inputs.scenario_path }}" ]; then
           echo "Scenario file not found: caller_repo/${{ inputs.scenario_path }}"
@@ -52,13 +53,12 @@ runs:
         DEP_PATH="caller_repo/${{ inputs.dependencies_file_path }}"
         if [ ! -f "$DEP_PATH" ]; then
           echo "WARNING: Dependencies file not found at: $DEP_PATH"
-          echo "DEPENDENCIES=No dependencies file found." >> $GITHUB_ENV
+          ISSUE_BODY="Please approve this ${{ inputs.test_type }} load test. No dependencies file provided."
+          echo "ISSUE_BODY=$ISSUE_BODY" >> $GITHUB_OUTPUT
         else
-          {
-            echo "DEPENDENCIES<<EOF"
-            cat "$DEP_PATH"
-            echo "EOF"
-          } >> $GITHUB_ENV
+          DEPS_CONTENT=$(cat "$DEP_PATH")
+          ISSUE_BODY="Please approve this ${{ inputs.test_type }} load test. Dependencies: $DEPS_CONTENT"
+          echo "ISSUE_BODY=$ISSUE_BODY" >> $GITHUB_OUTPUT
         fi
     
     - name: Require Manual DevOps approval for heavy tests
@@ -69,9 +69,7 @@ runs:
         approvers: Myriad-Sira
         minimum-approvals: 1
         issue-title: "Manual Approval Required for heavy load tests."
-        issue-body: |
-          Please approve or deny the execution of this load test.
-          ${{ env.DEPENDENCIES }}
+        issue-body: ${{ steps.validation_step.outputs.ISSUE_BODY }}
     
     - name: Install jq
       shell: bash
