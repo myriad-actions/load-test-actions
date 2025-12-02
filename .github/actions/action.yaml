@@ -56,7 +56,8 @@ runs:
           ISSUE_BODY="Please approve this ${{ inputs.test_type }} load test. No dependencies file provided."
           echo "ISSUE_BODY=$ISSUE_BODY" >> $GITHUB_OUTPUT
         else
-          DEPS_CONTENT=$(cat "$DEP_PATH")
+          # Read and clean the content - remove comment lines starting with #
+          DEPS_CONTENT=$(grep -v '^#' "$DEP_PATH" | head -20 | tr '\n' ' ')
           ISSUE_BODY="Please approve this ${{ inputs.test_type }} load test. Dependencies: $DEPS_CONTENT"
           echo "ISSUE_BODY=$ISSUE_BODY" >> $GITHUB_OUTPUT
         fi
