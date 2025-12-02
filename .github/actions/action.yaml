@@ -10,6 +10,11 @@ inputs:
     description: "Path to scenario file in the calling repository"
     required: true
   
+  dependencies_file_path:
+    description: "Path the dependencies of the repo"
+    required: false
+    default: ""
+  
   variables:
     required: false
     description: "JSON object containing env variables for scenarios"
@@ -35,17 +40,37 @@ runs:
         repository: myriad-actions/load-test-actions
         path: action_repo
     
-    - name: Validate scenario file presence and copy scenario.js from caller
+    - name: Validate scenario file and its executable
       shell: bash
+      id: validation_step
       run: |
-        if [ ! -f "${{ inputs.scenario_path }}" ]; then
-          echo "Scenario file not found: ${{ inputs.scenario_path }}"
+        if [ ! -f "caller_repo/${{ inputs.scenario_path }}" ]; then
+          echo "Scenario file not found: caller_repo/${{ inputs.scenario_path }}"
           exit 1
         fi
-        echo "Scenario file found: ${{ inputs.scenario_path }}"
         cp caller_repo/${{ inputs.scenario_path }} action_repo/scenario.js
-        ls -la caller_repo
-        ls -la action_repo
+
+        DEP_PATH="caller_repo/${{ inputs.dependencies_file_path }}"
+        if [ ! -f "$DEP_PATH" ]; then
+          echo "WARNING: Dependencies file not found at: $DEP_PATH"
+          ISSUE_BODY="Please approve this ${{ inputs.test_type }} load test. No dependencies file provided."
+          echo "ISSUE_BODY=$ISSUE_BODY" >> $GITHUB_OUTPUT
+        else
+          # Read and clean the content - remove comment lines starting with #
+          DEPS_CONTENT=$(grep -v '^#' "$DEP_PATH" | head -20 | tr '\n' ' ')
+          ISSUE_BODY="Please approve this ${{ inputs.test_type }} load test. Dependencies: $DEPS_CONTENT"
+          echo "ISSUE_BODY=$ISSUE_BODY" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Require Manual DevOps approval for heavy tests
+      if: ${{ inputs.test_type == 'stress' || inputs.test_type == 'soak' }}
+      uses: trstringer/manual-approval@v1
+      with:
+        secret: ${{ github.TOKEN }}
+        approvers: Myriad-Sira
+        minimum-approvals: 1
+        issue-title: "Manual Approval Required for heavy load tests."
+        issue-body: ${{ steps.validation_step.outputs.ISSUE_BODY }}
     
     - name: Install jq
       shell: bash
@@ -63,8 +88,6 @@ runs:
       shell: bash
       run: |
         export $(cat .envvars | xargs)
-        echo "Loaded variables:"
-        cat .envvars
     
     - name: Setup k6
       uses: grafana/setup-k6-action@v1
