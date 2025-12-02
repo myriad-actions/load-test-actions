@@ -28,6 +28,8 @@ runs:
       with:
         repository: ${{ github.repository }}
         path: caller_repo
+        run: |
+          echo "${{ github.repository }}" 
     
     - name: Checkout this action
       uses: actions/checkout@v4
@@ -43,6 +45,8 @@ runs:
         fi
         echo "Scenario file found: ${{ inputs.scenario_path }}"
         cp caller_repo/${{ inputs.scenario_path }} action_repo/scenario.js
+        ls -la caller_repo
+        ls -la action_repo
     
     - name: Install jq
       shell: bash
