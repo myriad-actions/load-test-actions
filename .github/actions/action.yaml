@@ -32,6 +32,7 @@ runs:
     - name: Checkout this action
       uses: actions/checkout@v4
       with:
+        repository: myriad-actions/load-test-actions
         path: action_repo
     
     - name: Validate scenario file presence and copy scenario.js from caller
@@ -43,6 +44,8 @@ runs:
         fi
         echo "Scenario file found: ${{ inputs.scenario_path }}"
         cp caller_repo/${{ inputs.scenario_path }} action_repo/scenario.js
+        ls -la caller_repo
+        ls -la action_repo
     
     - name: Install jq
       shell: bash
@@ -68,6 +71,7 @@ runs:
 
     - name: Run Load Test
       shell: bash
+      working-directory: ./action_repo
       run: |
         k6 run \
           templates/${{ inputs.test_type }}.js
