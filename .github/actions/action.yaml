@@ -103,4 +103,4 @@ runs:
       if: ${{ inputs.email_notify == 'true' }}
       shell: bash
       run: |
-        echo "hello world"
+        echo "TODO: Repo is public and send mail required secret configs"
