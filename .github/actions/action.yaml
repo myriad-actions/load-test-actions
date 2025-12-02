@@ -1,0 +1,79 @@
+name: "Load Testing Action"
+description: "Reusable GitHub Action for running load tests with templated k6 scripts."
+
+inputs:
+  test_type:
+    description: "Type of load test to run (smoke, acceptance, stress, soak)"
+    required: true
+
+  scenario_path:
+    description: "Path to scenario file in the calling repository"
+    required: true
+  
+  variables:
+    required: false
+    description: "JSON object containing env variables for scenarios"
+    default: "{}"
+
+  email_notify:
+    description: "Enable email summary notification (true/false)"
+    required: false
+    default: "false"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout caller repository
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ github.repository }}
+        path: caller_repo
+    
+    - name: Checkout this action
+      uses: actions/checkout@v4
+      with:
+        path: action_repo
+    
+    - name: Validate scenario file presence and copy scenario.js from caller
+      shell: bash
+      run: |
+        if [ ! -f "${{ inputs.scenario_path }}" ]; then
+          echo "Scenario file not found: ${{ inputs.scenario_path }}"
+          exit 1
+        fi
+        echo "Scenario file found: ${{ inputs.scenario_path }}"
+        cp caller_repo/${{ inputs.scenario_path }} action_repo/scenario.js
+    
+    - name: Install jq
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y jq
+
+    - name: Parse variables into env file
+      shell: bash
+      run: |
+        echo '${{ inputs.variables }}' | jq -r 'to_entries[] | "\(.key)=\(.value)"' > .envvars
+        cat .envvars
+    
+    - name: Load variables into environment
+      shell: bash
+      run: |
+        export $(cat .envvars | xargs)
+        echo "Loaded variables:"
+        cat .envvars
+    
+    - name: Setup k6
+      uses: grafana/setup-k6-action@v1
+
+    - name: Run Load Test
+      shell: bash
+      run: |
+        k6 run \
+          templates/${{ inputs.test_type }}.js
+
+    - name: Send Email Notification
+      if: ${{ inputs.email_notify == 'true' }}
+      shell: bash
+      run: |
+        echo "hello world"
