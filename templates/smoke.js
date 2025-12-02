@@ -18,7 +18,7 @@ export default function () {
     for (const fn of scenario.smoke) {
         fn();
     }
-sleep(1);
+    sleep(1);
 }
 
 
