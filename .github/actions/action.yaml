@@ -28,12 +28,11 @@ runs:
       with:
         repository: ${{ github.repository }}
         path: caller_repo
-        run: |
-          echo "${{ github.repository }}" 
     
     - name: Checkout this action
       uses: actions/checkout@v4
       with:
+        repository: myriad-sas/
         path: action_repo
     
     - name: Validate scenario file presence and copy scenario.js from caller
