@@ -32,7 +32,7 @@ runs:
     - name: Checkout this action
       uses: actions/checkout@v4
       with:
-        repository: myriad-sas/
+        repository: myriad-actions/load-test-actions
         path: action_repo
     
     - name: Validate scenario file presence and copy scenario.js from caller
