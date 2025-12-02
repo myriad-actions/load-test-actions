@@ -10,6 +10,11 @@ inputs:
     description: "Path to scenario file in the calling repository"
     required: true
   
+  dependencies_file_path:
+    description: "Path the dependencies of the repo"
+    required: false
+    default: ""
+  
   variables:
     required: false
     description: "JSON object containing env variables for scenarios"
@@ -44,8 +49,27 @@ runs:
         fi
         echo "Scenario file found: ${{ inputs.scenario_path }}"
         cp caller_repo/${{ inputs.scenario_path }} action_repo/scenario.js
-        ls -la caller_repo
-        ls -la action_repo
+
+        DEP_PATH="caller_repo/${{ inputs.dependencies_file_path }}"
+        if [ ! -f "$DEP_PATH" ]; then
+          echo "WARNING: Dependencies file not found at: $DEP_PATH"
+        else
+          echo "Dependencies file found: $DEP_PATH"
+        fi
+        echo "DEPENDENCIES=$DEP_PATH" >> $GITHUB_ENV
+    
+    - name: Require Manual DevOps approval for heavy tests
+      if: ${{ inputs.test_type == 'stress' || inputs.test_type == 'soak' }}
+      uses: trstringer/manual-approval@v1
+      with:
+        secret: ${{ github.TOKEN }}
+        approvers: Myriad-Sira
+        minimum-approvals: 1
+        issue-title: "Manual Approval Required for heavy load tests."
+        issue-body: |
+          Please approve or deny the execution of this load test.
+          Dependencies file path:
+          ${{ env.DEPENDENCIES }}
     
     - name: Install jq
       shell: bash
@@ -63,8 +87,6 @@ runs:
       shell: bash
       run: |
         export $(cat .envvars | xargs)
-        echo "Loaded variables:"
-        cat .envvars
     
     - name: Setup k6
       uses: grafana/setup-k6-action@v1
