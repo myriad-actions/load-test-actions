@@ -72,7 +72,7 @@ class PrometheusMetrics {
   }
 
   async queryMetric(promql) {
-    const url = `${this.prometheusUrl}/api/v1/query?query=${encodeURIComponent(promql)}&time=${this.testEnd}`;
+    const url = `${this.prometheusUrl}metrics/prometheus/api/v1/query?query=${encodeURIComponent(promql)}&time=${this.testEnd}`;
     const headers = {
       "X-API-TOKEN": this.proml_api_key
     };
