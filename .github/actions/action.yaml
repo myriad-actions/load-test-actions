@@ -160,7 +160,7 @@ runs:
       working-directory: ./action_repo
       # node prometheus-metrics.js > prometheus-metrics.json || echo '{}' > prometheus-metrics.json
       run: |
-        node prometheus-metrics.js > prometheus-metrics.json 2>/dev/null || echo '{"timestamp":"now","cpu":{},"memory":{},"component_metrics":{}}' > prometheus-metrics.json
+        node prometheus-metrics.js > prometheus-metrics.json
         cat prometheus-metrics.json
         
         # Extract metrics for outputs
