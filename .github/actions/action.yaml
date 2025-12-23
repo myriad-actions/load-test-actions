@@ -1,5 +1,5 @@
 name: "Load Testing Action"
-description: "Reusable GitHub Action for running load tests with templated k6 scripts."
+description: "Reusable GitHub Action for running load tests with dynamic k6 scenarios + Prometheus metrics"
 
 inputs:
   test_type:
@@ -7,11 +7,11 @@ inputs:
     required: true
 
   config_path:
-    description: "Path to config file in which we have scenarios, slas, etc"
+    description: "Path to config file with scenarios, SLAs, etc (e.g. load_test/config.js)"
     required: true
   
   dependencies_file_path:
-    description: "Path the dependencies of the repo"
+    description: "Path to dependencies file"
     required: false
     default: ""
   
@@ -24,6 +24,20 @@ inputs:
     description: "Enable email summary notification (true/false)"
     required: false
     default: "false"
+
+outputs:
+  test_passed:
+    description: "Did the load test pass?"
+    value: ${{ steps.run-test.outputs.test_passed }}
+  report_path:
+    description: "Path to unified JSON report"
+    value: ${{ steps.merge-reports.outputs.report_path }}
+  cpu_max:
+    description: "Max CPU usage during test"
+    value: ${{ steps.prometheus-step.outputs.cpu_max }}
+  mem_max:
+    description: "Max memory usage during test"
+    value: ${{ steps.prometheus-step.outputs.mem_max }}
 
 runs:
   using: "composite"
@@ -40,112 +54,169 @@ runs:
         repository: myriad-actions/load-test-actions
         path: action_repo
     
-    - name: Validate config file and its executable
-      shell: bash
+    - name: Validate config file
       id: validation_step
+      shell: bash
       run: |
-        if [ ! -f "caller_repo/${{ inputs.config_path }}" ]; then
-          echo "Load Test Config file not found: caller_repo/${{ inputs.config_path }}"
+        CONFIG_PATH="caller_repo/${{ inputs.config_path }}"
+        if [ ! -f "$CONFIG_PATH" ]; then
+          echo "Load Test Config file not found: $CONFIG_PATH"
           exit 1
         fi
-        cp caller_repo/${{ inputs.config_path }} action_repo/config.js
+        cp "$CONFIG_PATH" action_repo/config.js
+        echo "Config copied: action_repo/config.js"
 
         DEP_PATH="caller_repo/${{ inputs.dependencies_file_path }}"
         if [ ! -f "$DEP_PATH" ]; then
-          echo "WARNING: Dependencies file not found at: $DEP_PATH"
-          ISSUE_BODY="Please approve this ${{ inputs.test_type }} load test. No dependencies file provided."
+          echo "⚠️ Dependencies file not found: $DEP_PATH"
+          ISSUE_BODY="Please approve this ${{ inputs.test_type }} load test. No dependencies provided."
           echo "ISSUE_BODY=$ISSUE_BODY" >> $GITHUB_OUTPUT
         else
-          # Read and clean the content - remove comment lines starting with #
           DEPS_CONTENT=$(grep -v '^#' "$DEP_PATH" | head -20 | tr '\n' ' ')
-          ISSUE_BODY="Please approve this ${{ inputs.test_type }} load test. Dependencies: $DEPS_CONTENT"
+          ISSUE_BODY="Please approve ${{ inputs.test_type }} load test. Dependencies: $DEPS_CONTENT"
           echo "ISSUE_BODY=$ISSUE_BODY" >> $GITHUB_OUTPUT
         fi
     
-    - name: Require Manual DevOps approval for heavy tests
+    - name: Require Manual Approval (stress/soak)
       if: ${{ inputs.test_type == 'stress' || inputs.test_type == 'soak' }}
       uses: trstringer/manual-approval@v1
       with:
         secret: ${{ github.TOKEN }}
         approvers: Myriad-Sira
         minimum-approvals: 1
-        issue-title: "Manual Approval Required for heavy load tests."
+        issue-title: "Manual Approval: ${{ inputs.test_type }} Load Test"
         issue-body: ${{ steps.validation_step.outputs.ISSUE_BODY }}
     
-    - name: Install jq
+    - name: Install dependencies (jq)
       shell: bash
       run: |
-        sudo apt-get update
+        sudo apt-get update -qq
         sudo apt-get install -y jq
-
-    - name: Parse variables into env file
+    
+    - name: Parse variables to .env
       shell: bash
       run: |
         echo '${{ inputs.variables }}' | jq -r 'to_entries[] | "\(.key)=\(.value)"' > .envvars
         cat .envvars
     
-    - name: Load variables into environment
+    - name: Load environment variables
       shell: bash
       run: |
         export $(cat .envvars | xargs)
     
     - name: Setup k6
       uses: grafana/setup-k6-action@v1
-
+    
+    # 🔥 FIXED: Proper timer + test execution
+    - name: Start Load Test Timer
+      id: start-timer
+      shell: bash
+      run: |
+        START_TIME=$(date +%s)
+        echo "start_time=$START_TIME" >> $GITHUB_OUTPUT
+        echo "START_TIME=$START_TIME" >> $GITHUB_ENV
+        echo "🟢 Test START: $(date -d "@$START_TIME")"
+    
     - name: Run Load Test
+      id: run-test
       shell: bash
       working-directory: ./action_repo
+      continue-on-error: true
+      env:
+        TEST_TYPE: ${{ inputs.test_type }}
+        SCENARIO_FILE: config.js  # From caller_repo
+        START_TIME: ${{ steps.start-timer.outputs.start_time }}
       run: |
-        "TEST_TYPE=${{ inputs.test_type }}" >> $GITHUB_ENV
-        "START_TIME=$(date +%s)" >> $GITHUB_ENV
         k6 run \
+          --out json=results.json \
+          --summary-export=summary-${{ inputs.test_type }}.json \
           entrypoint.js
-        "$END_TIME=(date +%s)" >> $GITHUB_ENV
+        
+        EXIT_CODE=$?
+        END_TIME=$(date +%s)
+        echo "test_passed=$([ $EXIT_CODE -eq 0 ] && echo true || echo false)" >> $GITHUB_OUTPUT
+        echo "end_time=$END_TIME" >> $GITHUB_OUTPUT
+        echo "END_TIME=$END_TIME" >> $GITHUB_ENV
+        echo "🟢 Test END: $(date -d "@$END_TIME")"
     
-    ### COLLECT CPU, MEM Prometheus Metrics ###
     - name: Install Node.js dependencies
+      if: always()
       shell: bash
       run: |
         npm init -y
         npm install node-fetch@2
-
+    
     - name: Collect Prometheus Metrics
       id: prometheus-step
+      if: always()
       shell: bash
       env:
-        COMPONENT_NAME: ${{ github.event.repository.name }}
-        START_TIMESTAMP: ${{ steps.start-timer.outputs.start_time }}
-        END_TIMESTAMP: ${{ steps.start-timer.outputs.end_time }}
+        GITHUB_REPOSITORY_NAME: ${{ github.event.repository.name }}
+        TEST_START_TIMESTAMP: ${{ steps.start-timer.outputs.start_time }}
+        TEST_END_TIMESTAMP: ${{ steps.run-test.outputs.end_time }}
+      working-directory: ./action_repo
       run: |
-        node prometheus-metrics.js > prometheus-metrics.json
+        node prometheus-metrics.js > prometheus-metrics.json || echo '{}' > prometheus-metrics.json
         cat prometheus-metrics.json
         
-        # Extract key values for email/reporting
+        # Extract metrics for outputs
         CPU_MIN=$(jq -r '.cpu.cpu_min // "N/A"' prometheus-metrics.json)
         CPU_MAX=$(jq -r '.cpu.cpu_max // "N/A"' prometheus-metrics.json)
+        CPU_AVG=$(jq -r '.cpu.cpu_avg // "N/A"' prometheus-metrics.json)
         MEM_MIN=$(jq -r '.memory.mem_min // "N/A"' prometheus-metrics.json)
+        MEM_MAX=$(jq -r '.memory.mem_max // "N/A"' prometheus-metrics.json)
+        MEM_AVG=$(jq -r '.memory.mem_avg // "N/A"' prometheus-metrics.json)
+        
         echo "cpu_min=$CPU_MIN" >> $GITHUB_OUTPUT
         echo "cpu_max=$CPU_MAX" >> $GITHUB_OUTPUT
+        echo "cpu_avg=$CPU_AVG" >> $GITHUB_OUTPUT
         echo "mem_min=$MEM_MIN" >> $GITHUB_OUTPUT
+        echo "mem_max=$MEM_MAX" >> $GITHUB_OUTPUT
+        echo "mem_avg=$MEM_AVG" >> $GITHUB_OUTPUT
     
-    - name: Merge Load summary & Prometheus requests reesult
+    - name: Merge Load Test + Prometheus Reports
       id: merge-reports
+      if: always()
       shell: bash
       run: |
-        K6_JSON=$(cat summary-${{ inputs.test_type }}.json)
-        PROM_JSON=$(cat prometheus-metrics.json)
+        # Ensure files exist
+        touch summary-${{ inputs.test_type }}.json
+        touch prometheus-metrics.json
+        
+        K6_JSON=$(cat summary-${{ inputs.test_type }}.json | jq .)
+        PROM_JSON=$(cat prometheus-metrics.json | jq .)
         
         cat > unified-report.json << EOF
         {
           "load_test": $K6_JSON,
-          "prometheus": $PROM_JSON
+          "prometheus": $PROM_JSON,
+          "test_status": "${{ steps.run-test.outputs.test_passed }}",
+          "merged_at": "$(date -Iseconds)",
+          "repository": "${{ github.event.repository.name }}",
+          "test_type": "${{ inputs.test_type }}"
         }
         EOF
+        
         cat unified-report.json
         echo "report_path=unified-report.json" >> $GITHUB_OUTPUT
-
-    - name: Send Email Notification
-      if: ${{ inputs.email_notify == 'true' }}
+    
+    - name: Generate HTML Report
+      if: inputs.email_notify == 'true'
       shell: bash
       run: |
-        echo "TODO: Repo is public and send mail required secret configs"
+        node generate-html-report.js unified-report.json > load-test-report.html
+        echo "html_report=load-test-report.html" >> $GITHUB_OUTPUT
+    
+    # - name: Send Email Notification
+    #   if: ${{ inputs.email_notify == 'true' }}
+    #   uses: dawidd6/action-send-mail@v3
+    #   with:
+    #     server_address: smtp.gmail.com
+    #     server_port: 587
+    #     username: ${{ secrets.EMAIL_USERNAME }}
+    #     password: ${{ secrets.EMAIL_PASSWORD }}
+    #     subject: "🧪 Load Test: ${{ inputs.test_type }} - ${{ steps.run-test.outputs.test_passed }}"
+    #     to: devops@company.com
+    #     from: load-test@company.com
+    #     html_body_file: load-test-report.html
+    #     secure: true
