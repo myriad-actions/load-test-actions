@@ -128,8 +128,6 @@ runs:
         START_TIME: ${{ steps.start-timer.outputs.start_time }}
       run: |
         k6 run \
-          --out json=results.json \
-          --summary-export=summary-${{ inputs.test_type }}.json \
           entrypoint.js
         
         EXIT_CODE=$?
