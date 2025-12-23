@@ -121,8 +121,15 @@ runs:
       id: run-test
       shell: bash
       working-directory: ./action_repo
+      continue-on-error: true
+      env:
+        TEST_TYPE: ${{ inputs.test_type }}
+        SCENARIO_FILE: config.js  # From caller_repo
+        START_TIME: ${{ steps.start-timer.outputs.start_time }}
       run: |
         k6 run \
+          --out json=results.json \
+          --summary-export=summary-${{ inputs.test_type }}.json \
           entrypoint.js
         
         EXIT_CODE=$?
