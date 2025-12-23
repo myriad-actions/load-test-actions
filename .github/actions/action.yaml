@@ -170,8 +170,6 @@ runs:
       working-directory: ./action_repo
       shell: bash
       run: |
-        ls -la *.json || echo "No JSON files found"
-
         # Create fallback files
         SUMMARY_FILE="summary-${{ inputs.test_type }}.json"
         PROM_FILE="prometheus-metrics.json"
