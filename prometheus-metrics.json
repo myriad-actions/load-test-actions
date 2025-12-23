@@ -1,0 +1,27 @@
+{
+  "timestamp": "2025-12-22T16:03:08.855Z",
+  "repo": "fin-b2w-core-logic",
+  "container": "fin-b2w-core-logic",
+  "test_window": "1765895384-1765895684",
+  "test_duration": "300s",
+  "cpu": {
+    "cpu_min": 0.0037414633132246884,
+    "cpu_max": 0.004172244195501678,
+    "cpu_avg": 0.0038644399175864355
+  },
+  "memory": {
+    "mem_min": "147.07 MiB",
+    "mem_max": "147.39 MiB",
+    "mem_avg": "147.2 MiB"
+  },
+  "component_metrics": {
+    "round(sum(increase(b2w_core_logic_http_requests_total[300s])), 1)": "37",
+    "round(sum(increase(b2w_core_logic_http_requests_count[300s])), 1)": "N/A",
+    "rate(b2w_core_logic_http_requests_duration_seconds_bucket[300s])": "N/A",
+    "rate(b2w_core_logic_http_requests_duration_milliseconds_bucket[300s])": "N/A",
+    "round(sum(increase(b2w_core_logic_http_request_total[300s])), 1)": "N/A",
+    "round(sum(increase(b2w_core_logic_http_request_count[300s])), 1)": "N/A",
+    "rate(b2w_core_logic_http_request_duration_seconds_bucket[300s])": "N/A",
+    "rate(b2w_core_logic_http_request_duration_milliseconds_bucket[300s])": "0.12413793103448277"
+  }
+}

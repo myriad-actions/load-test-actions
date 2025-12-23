@@ -6,8 +6,8 @@ inputs:
     description: "Type of load test to run (smoke, acceptance, stress, soak)"
     required: true
 
-  scenario_path:
-    description: "Path to scenario file in the calling repository"
+  config_path:
+    description: "Path to config file in which we have scenarios, slas, etc"
     required: true
   
   dependencies_file_path:
@@ -40,15 +40,15 @@ runs:
         repository: myriad-actions/load-test-actions
         path: action_repo
     
-    - name: Validate scenario file and its executable
+    - name: Validate config file and its executable
       shell: bash
       id: validation_step
       run: |
-        if [ ! -f "caller_repo/${{ inputs.scenario_path }}" ]; then
-          echo "Scenario file not found: caller_repo/${{ inputs.scenario_path }}"
+        if [ ! -f "caller_repo/${{ inputs.config_path }}" ]; then
+          echo "Load Test Config file not found: caller_repo/${{ inputs.config_path }}"
           exit 1
         fi
-        cp caller_repo/${{ inputs.scenario_path }} action_repo/scenario.js
+        cp caller_repo/${{ inputs.config_path }} action_repo/config.js
 
         DEP_PATH="caller_repo/${{ inputs.dependencies_file_path }}"
         if [ ! -f "$DEP_PATH" ]; then
@@ -96,8 +96,54 @@ runs:
       shell: bash
       working-directory: ./action_repo
       run: |
+        "TEST_TYPE=${{ inputs.test_type }}" >> $GITHUB_ENV
+        "START_TIME=$(date +%s)" >> $GITHUB_ENV
         k6 run \
-          templates/${{ inputs.test_type }}.js
+          entrypoint.js
+        "$END_TIME=(date +%s)" >> $GITHUB_ENV
+    
+    ### COLLECT CPU, MEM Prometheus Metrics ###
+    - name: Install Node.js dependencies
+      shell: bash
+      run: |
+        npm init -y
+        npm install node-fetch@2
+
+    - name: Collect Prometheus Metrics
+      id: prometheus-step
+      shell: bash
+      env:
+        PROMETHEUS_URL: ${{ vars.PROMETHEUS_URL }}
+        COMPONENT_NAME: ${{ github.event.repository.name }}
+        START_TIMESTAMP: ${{ steps.start-timer.outputs.start_time }}
+        END_TIMESTAMP: ${{ steps.start-timer.outputs.end_time }}
+      run: |
+        node prometheus-metrics.js > prometheus-metrics.json
+        cat prometheus-metrics.json
+        
+        # Extract key values for email/reporting
+        CPU_MIN=$(jq -r '.cpu.cpu_min // "N/A"' prometheus-metrics.json)
+        CPU_MAX=$(jq -r '.cpu.cpu_max // "N/A"' prometheus-metrics.json)
+        MEM_MIN=$(jq -r '.memory.mem_min // "N/A"' prometheus-metrics.json)
+        echo "cpu_min=$CPU_MIN" >> $GITHUB_OUTPUT
+        echo "cpu_max=$CPU_MAX" >> $GITHUB_OUTPUT
+        echo "mem_min=$MEM_MIN" >> $GITHUB_OUTPUT
+    
+    - name: Merge Load summary & Prometheus requests reesult
+      id: merge-reports
+      shell: bash
+      run: |
+        K6_JSON=$(cat summary-${{ inputs.test_type }}.json)
+        PROM_JSON=$(cat prometheus-metrics.json)
+        
+        cat > unified-report.json << EOF
+        {
+          "load_test": $K6_JSON,
+          "prometheus": $PROM_JSON
+        }
+        EOF
+        cat unified-report.json
+        echo "report_path=unified-report.json" >> $GITHUB_OUTPUT
 
     - name: Send Email Notification
       if: ${{ inputs.email_notify == 'true' }}
