@@ -87,12 +87,6 @@ runs:
         issue-title: "Manual Approval: ${{ inputs.test_type }} Load Test"
         issue-body: ${{ steps.validation_step.outputs.ISSUE_BODY }}
     
-    - name: Install Node.js 20 + npm
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
-        cache: 'npm'
-    
     - name: Install jq
       shell: bash
       run: |
@@ -145,69 +139,69 @@ runs:
         echo "END_TIME=$END_TIME" >> $GITHUB_ENV
         echo "🟢 Test END: $(date -d "@$END_TIME")"
     
-    - name: Install Node.js dependencies
-      if: always()
-      shell: bash
-      run: |
-        npm init -y
-        npm install node-fetch@2
+    # - name: Install Node.js dependencies
+    #   if: always()
+    #   shell: bash
+    #   run: |
+    #     npm init -y
+    #     npm install node-fetch@2
     
-    - name: Collect Prometheus Metrics
-      id: prometheus-step
-      if: always()
-      shell: bash
-      env:
-        GITHUB_REPOSITORY_NAME: ${{ github.event.repository.name }}
-        TEST_START_TIMESTAMP: ${{ steps.start-timer.outputs.start_time }}
-        TEST_END_TIMESTAMP: ${{ steps.run-test.outputs.end_time }}
-      working-directory: ./action_repo
-      # node prometheus-metrics.js > prometheus-metrics.json || echo '{}' > prometheus-metrics.json
-      run: |
-        node prometheus-metrics.js > prometheus-metrics.json 2>/dev/null || echo '{"timestamp":"now","cpu":{},"memory":{},"component_metrics":{}}' > prometheus-metrics.json
-        cat prometheus-metrics.json
+    # - name: Collect Prometheus Metrics
+    #   id: prometheus-step
+    #   if: always()
+    #   shell: bash
+    #   env:
+    #     GITHUB_REPOSITORY_NAME: ${{ github.event.repository.name }}
+    #     TEST_START_TIMESTAMP: ${{ steps.start-timer.outputs.start_time }}
+    #     TEST_END_TIMESTAMP: ${{ steps.run-test.outputs.end_time }}
+    #   working-directory: ./action_repo
+    #   # node prometheus-metrics.js > prometheus-metrics.json || echo '{}' > prometheus-metrics.json
+    #   run: |
+    #     node prometheus-metrics.js > prometheus-metrics.json 2>/dev/null || echo '{"timestamp":"now","cpu":{},"memory":{},"component_metrics":{}}' > prometheus-metrics.json
+    #     cat prometheus-metrics.json
         
-        # Extract metrics for outputs
-        CPU_MIN=$(jq -r '.cpu.cpu_min // "N/A"' prometheus-metrics.json)
-        CPU_MAX=$(jq -r '.cpu.cpu_max // "N/A"' prometheus-metrics.json)
-        CPU_AVG=$(jq -r '.cpu.cpu_avg // "N/A"' prometheus-metrics.json)
-        MEM_MIN=$(jq -r '.memory.mem_min // "N/A"' prometheus-metrics.json)
-        MEM_MAX=$(jq -r '.memory.mem_max // "N/A"' prometheus-metrics.json)
-        MEM_AVG=$(jq -r '.memory.mem_avg // "N/A"' prometheus-metrics.json)
+    #     # Extract metrics for outputs
+    #     CPU_MIN=$(jq -r '.cpu.cpu_min // "N/A"' prometheus-metrics.json)
+    #     CPU_MAX=$(jq -r '.cpu.cpu_max // "N/A"' prometheus-metrics.json)
+    #     CPU_AVG=$(jq -r '.cpu.cpu_avg // "N/A"' prometheus-metrics.json)
+    #     MEM_MIN=$(jq -r '.memory.mem_min // "N/A"' prometheus-metrics.json)
+    #     MEM_MAX=$(jq -r '.memory.mem_max // "N/A"' prometheus-metrics.json)
+    #     MEM_AVG=$(jq -r '.memory.mem_avg // "N/A"' prometheus-metrics.json)
         
-        echo "cpu_min=$CPU_MIN" >> $GITHUB_OUTPUT
-        echo "cpu_max=$CPU_MAX" >> $GITHUB_OUTPUT
-        echo "cpu_avg=$CPU_AVG" >> $GITHUB_OUTPUT
-        echo "mem_min=$MEM_MIN" >> $GITHUB_OUTPUT
-        echo "mem_max=$MEM_MAX" >> $GITHUB_OUTPUT
-        echo "mem_avg=$MEM_AVG" >> $GITHUB_OUTPUT
+    #     echo "cpu_min=$CPU_MIN" >> $GITHUB_OUTPUT
+    #     echo "cpu_max=$CPU_MAX" >> $GITHUB_OUTPUT
+    #     echo "cpu_avg=$CPU_AVG" >> $GITHUB_OUTPUT
+    #     echo "mem_min=$MEM_MIN" >> $GITHUB_OUTPUT
+    #     echo "mem_max=$MEM_MAX" >> $GITHUB_OUTPUT
+    #     echo "mem_avg=$MEM_AVG" >> $GITHUB_OUTPUT
     
-    - name: Merge Load Test + Prometheus Reports
-      id: merge-reports
-      if: always()
-      shell: bash
-      run: |
-        # Create fallback files
-        [ -f "summary-${{ inputs.test_type }}.json" ] || echo '{}' > "summary-${{ inputs.test_type }}.json"
-        [ -f "prometheus-metrics.json" ] || echo '{}' > prometheus-metrics.json
+    # - name: Merge Load Test + Prometheus Reports
+    #   id: merge-reports
+    #   if: always()
+    #   shell: bash
+    #   run: |
+    #     # Create fallback files
+    #     [ -f "summary-${{ inputs.test_type }}.json" ] || echo '{}' > "summary-${{ inputs.test_type }}.json"
+    #     [ -f "prometheus-metrics.json" ] || echo '{}' > prometheus-metrics.json
         
-        # Validate JSON
-        K6_JSON=$(cat "summary-${{ inputs.test_type }}.json" | jq . 2>/dev/null || echo '{}')
-        PROM_JSON=$(cat prometheus-metrics.json | jq . 2>/dev/null || echo '{}')
+    #     # Validate JSON
+    #     K6_JSON=$(cat "summary-${{ inputs.test_type }}.json" | jq . 2>/dev/null || echo '{}')
+    #     PROM_JSON=$(cat prometheus-metrics.json | jq . 2>/dev/null || echo '{}')
         
-        cat > unified-report.json << EOF
-        {
-          "load_test": ${K6_JSON},
-          "prometheus": ${PROM_JSON},
-          "test_status": "${{ steps.run-test.outputs.test_passed || 'unknown' }}",
-          "merged_at": "$(date -Iseconds)",
-          "repository": "${{ github.event.repository.name }}",
-          "test_type": "${{ inputs.test_type }}"
-        }
-        EOF
+    #     cat > unified-report.json << EOF
+    #     {
+    #       "load_test": ${K6_JSON},
+    #       "prometheus": ${PROM_JSON},
+    #       "test_status": "${{ steps.run-test.outputs.test_passed || 'unknown' }}",
+    #       "merged_at": "$(date -Iseconds)",
+    #       "repository": "${{ github.event.repository.name }}",
+    #       "test_type": "${{ inputs.test_type }}"
+    #     }
+    #     EOF
         
-        echo "✅ Unified report created"
-        cat unified-report.json
-        echo "report_path=unified-report.json" >> $GITHUB_OUTPUT
+    #     echo "✅ Unified report created"
+    #     cat unified-report.json
+    #     echo "report_path=unified-report.json" >> $GITHUB_OUTPUT
 
     # - name: Send Email Notification
     #   if: ${{ inputs.email_notify == 'true' }}
