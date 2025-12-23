@@ -108,7 +108,6 @@ runs:
     - name: Setup k6
       uses: grafana/setup-k6-action@v1
     
-    # 🔥 FIXED: Proper timer + test execution
     - name: Start Load Test Timer
       id: start-timer
       shell: bash
@@ -132,13 +131,15 @@ runs:
           --out json=results.json \
           --summary-export=summary-${{ inputs.test_type }}.json \
           entrypoint.js
-        
-        EXIT_CODE=$?
+    
+    - name: End Load Test Timer
+      id: end-timer
+      shell: bash
+      run: |
         END_TIME=$(date +%s)
-        echo "test_passed=$([ $EXIT_CODE -eq 0 ] && echo true || echo false)" >> $GITHUB_OUTPUT
         echo "end_time=$END_TIME" >> $GITHUB_OUTPUT
         echo "END_TIME=$END_TIME" >> $GITHUB_ENV
-        echo "🟢 Test END: $(date -d "@$END_TIME")"
+        echo "🟢 Test EDN: $(date -d "@$END_TIME")"
     
     - name: Setup Node.js
       uses: actions/setup-node@v4
@@ -157,41 +158,27 @@ runs:
       env:
         GITHUB_REPOSITORY_NAME: ${{ github.event.repository.name }}
         TEST_START_TIMESTAMP: ${{ steps.start-timer.outputs.start_time }}
-        TEST_END_TIMESTAMP: ${{ steps.run-test.outputs.end_time }}
+        TEST_END_TIMESTAMP: ${{ steps.end-timer.outputs.end_time }}
       working-directory: ./action_repo
-      # node prometheus-metrics.js > prometheus-metrics.json || echo '{}' > prometheus-metrics.json
       run: |
         node prometheus-metrics.js > prometheus-metrics.json
         cat prometheus-metrics.json
-        
-        # Extract metrics for outputs
-        CPU_MIN=$(jq -r '.cpu.cpu_min // "N/A"' prometheus-metrics.json)
-        CPU_MAX=$(jq -r '.cpu.cpu_max // "N/A"' prometheus-metrics.json)
-        CPU_AVG=$(jq -r '.cpu.cpu_avg // "N/A"' prometheus-metrics.json)
-        MEM_MIN=$(jq -r '.memory.mem_min // "N/A"' prometheus-metrics.json)
-        MEM_MAX=$(jq -r '.memory.mem_max // "N/A"' prometheus-metrics.json)
-        MEM_AVG=$(jq -r '.memory.mem_avg // "N/A"' prometheus-metrics.json)
-        
-        echo "cpu_min=$CPU_MIN" >> $GITHUB_OUTPUT
-        echo "cpu_max=$CPU_MAX" >> $GITHUB_OUTPUT
-        echo "cpu_avg=$CPU_AVG" >> $GITHUB_OUTPUT
-        echo "mem_min=$MEM_MIN" >> $GITHUB_OUTPUT
-        echo "mem_max=$MEM_MAX" >> $GITHUB_OUTPUT
-        echo "mem_avg=$MEM_AVG" >> $GITHUB_OUTPUT
     
     - name: Merge Load Test + Prometheus Reports
       id: merge-reports
       if: always()
+      working-directory: ./action_repo
       shell: bash
       run: |
+        ls -la *.json || echo "No JSON files found"
+
         # Create fallback files
-        [ -f "summary-${{ inputs.test_type }}.json" ] || echo '{}' > "summary-${{ inputs.test_type }}.json"
-        [ -f "prometheus-metrics.json" ] || echo '{}' > prometheus-metrics.json
+        SUMMARY_FILE="summary-${{ inputs.test_type }}.json"
+        PROM_FILE="prometheus-metrics.json"
         
-        # Validate JSON
-        K6_JSON=$(cat "summary-${{ inputs.test_type }}.json" | jq . 2>/dev/null || echo '{}')
-        PROM_JSON=$(cat prometheus-metrics.json | jq . 2>/dev/null || echo '{}')
-        
+        [ -f "$SUMMARY_FILE" ] || echo '{}' > "$SUMMARY_FILE"
+        [ -f "$PROM_FILE" ] || echo '{}' > "$PROM_FILE"
+
         cat > unified-report.json << EOF
         {
           "load_test": ${K6_JSON},
