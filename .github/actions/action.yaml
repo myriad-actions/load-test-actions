@@ -130,7 +130,7 @@ runs:
         k6 run \
           --out json=results.json \
           --summary-export=summary-${{ inputs.test_type }}.json \
-          entrypoint.js || echo '{}' > summary-${{ inputs.test_type }}.json
+          entrypoint.js
         
         EXIT_CODE=$?
         END_TIME=$(date +%s)
@@ -141,10 +141,12 @@ runs:
     
     - name: Install Node.js dependencies
       if: always()
-      shell: bash
-      run: |
-        npm init -y
-        npm install node-fetch@2
+    - uses: actions/checkout@v5
+    - uses: actions/setup-node@v6
+      with:
+        node-version: 24
+    - run: npm init -y
+    - run: npm install node-fetch@2
     
     - name: Collect Prometheus Metrics
       id: prometheus-step
