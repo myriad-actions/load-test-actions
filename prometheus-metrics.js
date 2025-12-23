@@ -6,7 +6,7 @@ class PrometheusMetrics {
     this.namespace = process.env.GITHUB_REPOSITORY_NAME;
     this.container = this.namespace; 
     this.specific_metrics_prefix = process.env.METRICS_PREFIX || this.container
-    
+    this.proml_api_key = process.env.LOGZIO_TOKEN
     this.testStart = parseInt(process.env.TEST_START_TIMESTAMP);
     this.testEnd = parseInt(process.env.TEST_END_TIMESTAMP);
     this.testDuration = this.testEnd - this.testStart;
@@ -74,7 +74,7 @@ class PrometheusMetrics {
   async queryMetric(promql) {
     const url = `${this.prometheusUrl}/api/v1/query?query=${encodeURIComponent(promql)}&time=${this.testEnd}`;
     const headers = {
-      "X-API-TOKEN": process.env.LOGZIO_TOKEN
+      "X-API-TOKEN": this.proml_api_key
     };
     
     const response = await fetch(url, { headers });
