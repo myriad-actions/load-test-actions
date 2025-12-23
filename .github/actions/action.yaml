@@ -179,12 +179,14 @@ runs:
         [ -f "$SUMMARY_FILE" ] || echo '{}' > "$SUMMARY_FILE"
         [ -f "$PROM_FILE" ] || echo '{}' > "$PROM_FILE"
 
+        # Validate JSON
+        K6_JSON=$(cat "$SUMMARY_FILE" | jq . 2>/dev/null || echo '{}')
+        PROM_JSON=$(cat "$PROM_FILE" | jq . 2>/dev/null || echo '{}')
+
         cat > unified-report.json << EOF
         {
           "load_test": ${K6_JSON},
           "prometheus": ${PROM_JSON},
-          "test_status": "${{ steps.run-test.outputs.test_passed || 'unknown' }}",
-          "merged_at": "$(date -Iseconds)",
           "repository": "${{ github.event.repository.name }}",
           "test_type": "${{ inputs.test_type }}"
         }
