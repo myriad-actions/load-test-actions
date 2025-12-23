@@ -140,11 +140,13 @@ runs:
         echo "🟢 Test END: $(date -d "@$END_TIME")"
     
     - name: Setup Node.js
+      shell: bash
       uses: actions/setup-node@v4
       with:
         node-version: '20'
     
     - name: Install deps
+      shell: bash
       working-directory: ./action_repo
       run: npm init -y && npm install node-fetch@3
     
