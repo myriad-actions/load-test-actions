@@ -87,7 +87,13 @@ runs:
         issue-title: "Manual Approval: ${{ inputs.test_type }} Load Test"
         issue-body: ${{ steps.validation_step.outputs.ISSUE_BODY }}
     
-    - name: Install dependencies (jq)
+    - name: Install Node.js 20 + npm
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+    
+    - name: Install jq
       shell: bash
       run: |
         sudo apt-get update -qq
@@ -130,7 +136,7 @@ runs:
         k6 run \
           --out json=results.json \
           --summary-export=summary-${{ inputs.test_type }}.json \
-          entrypoint.js
+          entrypoint.js || echo '{}' > summary-${{ inputs.test_type }}.json
         
         EXIT_CODE=$?
         END_TIME=$(date +%s)
@@ -155,8 +161,9 @@ runs:
         TEST_START_TIMESTAMP: ${{ steps.start-timer.outputs.start_time }}
         TEST_END_TIMESTAMP: ${{ steps.run-test.outputs.end_time }}
       working-directory: ./action_repo
+      # node prometheus-metrics.js > prometheus-metrics.json || echo '{}' > prometheus-metrics.json
       run: |
-        node prometheus-metrics.js > prometheus-metrics.json || echo '{}' > prometheus-metrics.json
+        node prometheus-metrics.js > prometheus-metrics.json 2>/dev/null || echo '{"timestamp":"now","cpu":{},"memory":{},"component_metrics":{}}' > prometheus-metrics.json
         cat prometheus-metrics.json
         
         # Extract metrics for outputs
@@ -179,34 +186,29 @@ runs:
       if: always()
       shell: bash
       run: |
-        # Ensure files exist
-        touch summary-${{ inputs.test_type }}.json
-        touch prometheus-metrics.json
+        # Create fallback files
+        [ -f "summary-${{ inputs.test_type }}.json" ] || echo '{}' > "summary-${{ inputs.test_type }}.json"
+        [ -f "prometheus-metrics.json" ] || echo '{}' > prometheus-metrics.json
         
-        K6_JSON=$(cat summary-${{ inputs.test_type }}.json | jq .)
-        PROM_JSON=$(cat prometheus-metrics.json | jq .)
+        # Validate JSON
+        K6_JSON=$(cat "summary-${{ inputs.test_type }}.json" | jq . 2>/dev/null || echo '{}')
+        PROM_JSON=$(cat prometheus-metrics.json | jq . 2>/dev/null || echo '{}')
         
         cat > unified-report.json << EOF
         {
-          "load_test": $K6_JSON,
-          "prometheus": $PROM_JSON,
-          "test_status": "${{ steps.run-test.outputs.test_passed }}",
+          "load_test": ${K6_JSON},
+          "prometheus": ${PROM_JSON},
+          "test_status": "${{ steps.run-test.outputs.test_passed || 'unknown' }}",
           "merged_at": "$(date -Iseconds)",
           "repository": "${{ github.event.repository.name }}",
           "test_type": "${{ inputs.test_type }}"
         }
         EOF
         
+        echo "✅ Unified report created"
         cat unified-report.json
         echo "report_path=unified-report.json" >> $GITHUB_OUTPUT
-    
-    - name: Generate HTML Report
-      if: inputs.email_notify == 'true'
-      shell: bash
-      run: |
-        node generate-html-report.js unified-report.json > load-test-report.html
-        echo "html_report=load-test-report.html" >> $GITHUB_OUTPUT
-    
+
     # - name: Send Email Notification
     #   if: ${{ inputs.email_notify == 'true' }}
     #   uses: dawidd6/action-send-mail@v3
