@@ -2,14 +2,19 @@ const fetch = require('node-fetch');
 
 class PrometheusMetrics {
   constructor() {
-    this.prometheusUrl = __ENV.PROMETHEUS_URL;
-    this.namespace = process.env.GITHUB_REPOSITORY_NAME;
+    this.prometheusUrl = process.env.PROMETHEUS_URL || "https://api-eu.logz.io/v1/";
+    this.namespace = process.env.GITHUB_REPOSITORY_NAME || "fin-adapter-gimac-ama";
     this.container = this.namespace; 
     this.specific_metrics_prefix = process.env.METRICS_PREFIX || this.container
-    this.proml_api_key = __ENV.LOGZIO_TOKEN
+    this.proml_api_key = process.env.LOGZIO_TOKEN || "2f6bd25f-341b-4a8e-99c7-403888f9b288"
     this.testStart = parseInt(process.env.TEST_START_TIMESTAMP);
     this.testEnd = parseInt(process.env.TEST_END_TIMESTAMP);
     this.testDuration = this.testEnd - this.testStart;
+    console.log(this.prometheusUrl || "NONE")
+    console.log(this.namespace)
+    console.log(this.container)
+    console.log(this.specific_metrics_prefix)
+    console.log(this.testDuration)
   }
 
   async getCpuMetrics(interval = `${this.testDuration}s`) {
@@ -23,8 +28,10 @@ class PrometheusMetrics {
     for (let i = 0; i < queries.length; i++) {
       try {
         const data = await this.queryMetric(queries[i]);
+        console.error("there")
         results[`cpu_${['min', 'max', 'avg'][i]}`] = this.parseValue(data);
       } catch (error) {
+        console.error("here")
         results[`cpu_${['min', 'max', 'avg'][i]}`] = 'N/A';
       }
     }
@@ -127,6 +134,7 @@ if (require.main === module) {
       const results = await metrics.getCompleteMetrics();
       console.log(JSON.stringify(results, null, 2));
     } catch (error) {
+      console.log(error)
       process.exit(1);
     }
   })();
