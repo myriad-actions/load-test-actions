@@ -140,10 +140,10 @@ runs:
         echo "🟢 Test END: $(date -d "@$END_TIME")"
     
     - name: Setup Node.js
-      shell: bash
       uses: actions/setup-node@v4
       with:
         node-version: '20'
+        cache: 'npm'
     
     - name: Install deps
       shell: bash
