@@ -113,7 +113,6 @@ runs:
       id: prometheus-step
       shell: bash
       env:
-        PROMETHEUS_URL: ${{ vars.PROMETHEUS_URL }}
         COMPONENT_NAME: ${{ github.event.repository.name }}
         START_TIMESTAMP: ${{ steps.start-timer.outputs.start_time }}
         END_TIMESTAMP: ${{ steps.start-timer.outputs.end_time }}
