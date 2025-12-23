@@ -125,8 +125,6 @@ if (require.main === module) {
     try {
       const metrics = new PrometheusMetrics();
       const results = await metrics.getCompleteMetrics();
-      results["url"]= this.prometheusUrl || "NONE"
-      results["TO"]= this.LOGZIO_TOKEN || "NONE"
       console.log(JSON.stringify(results, null, 2));
     } catch (error) {
       process.exit(1);
