@@ -10,6 +10,11 @@ class PrometheusMetrics {
     this.testStart = parseInt(process.env.TEST_START_TIMESTAMP);
     this.testEnd = parseInt(process.env.TEST_END_TIMESTAMP);
     this.testDuration = this.testEnd - this.testStart;
+    console.log(this.prometheusUrl)
+    console.log(this.namespace)
+    console.log(this.container)
+    console.log(this.specific_metrics_prefix)
+    console.log(this.testDuration)
   }
 
   async getCpuMetrics(interval = `${this.testDuration}s`) {
