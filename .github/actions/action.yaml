@@ -201,6 +201,29 @@ runs:
         echo "html_report=email-report.html" >> $GITHUB_OUTPUT
         head -50 email-report.html
     
+    - name: Echo Result and share link towards grafana
+      id: echo-and-grafana-monitoring
+      if: always()
+      shell: bash
+      working-directory: ./action_repo
+      env:
+        GRAFANA_URL: ${{ vars.GRAFANA_URL || 'https://grafana.demo.mgrp.mobi' }}
+        REPO_NAME: ${{ github.event.repository.name }}
+        TEST_TYPE: ${{ inputs.test_type }}
+        START_TIME: ${{ steps.start-timer.outputs.start_time }}
+        END_TIME: ${{ steps.end-timer.outputs.end_time }}
+      run: |
+        echo "=================================================="
+        echo "🎯 LOAD TEST RESULTS SUMMARY"
+        echo "=================================================="
+
+        cat unified-report.json
+
+        echo ""
+        echo "📊 VISUALIZE IN GRAFANA:"
+        echo "🔗 https://app-eu.logz.io/#/dashboard/metrics/d/af82qxrsvglj4c/load-test-dynamic-dashboard?var-namespace=${REPO_NAME}&from=${START_TIME}&to=${END_TIME}"
+        echo ""
+
     # - name: Send Email Notification
     #   if: inputs.email_notify == 'true'
     #   uses: dawidd6/action-send-mail@v3
