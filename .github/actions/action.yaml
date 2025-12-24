@@ -207,7 +207,6 @@ runs:
       shell: bash
       working-directory: ./action_repo
       env:
-        GRAFANA_URL: ${{ vars.GRAFANA_URL || 'https://grafana.demo.mgrp.mobi' }}
         REPO_NAME: ${{ github.event.repository.name }}
         TEST_TYPE: ${{ inputs.test_type }}
         START_TIME: ${{ steps.start-timer.outputs.start_time }}
