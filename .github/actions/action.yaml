@@ -98,7 +98,6 @@ runs:
       shell: bash
       run: |
         echo '${{ inputs.variables }}' | jq -r 'to_entries[] | "\(.key)=\(.value)"' > .envvars
-        cat .envvars
     
     - name: Load environment variables
       shell: bash
@@ -162,7 +161,6 @@ runs:
       working-directory: ./action_repo
       run: |
         node prometheus-metrics.js > prometheus-metrics.json
-        cat prometheus-metrics.json
     
     - name: Merge Load Test + Prometheus Reports
       id: merge-reports
@@ -191,19 +189,29 @@ runs:
         EOF
         
         echo "✅ Unified report created"
-        cat unified-report.json
         echo "report_path=unified-report.json" >> $GITHUB_OUTPUT
-
+    
+    - name: Generate HTML Email Report
+      id: html-report
+      if: always()
+      shell: bash
+      working-directory: ./action_repo
+      run: |
+        node generate-email-html.js > email-report.html
+        echo "html_report=email-report.html" >> $GITHUB_OUTPUT
+        head -50 email-report.html
+    
     # - name: Send Email Notification
-    #   if: ${{ inputs.email_notify == 'true' }}
+    #   if: inputs.email_notify == 'true'
     #   uses: dawidd6/action-send-mail@v3
     #   with:
-    #     server_address: smtp.gmail.com
-    #     server_port: 587
-    #     username: ${{ secrets.EMAIL_USERNAME }}
-    #     password: ${{ secrets.EMAIL_PASSWORD }}
-    #     subject: "🧪 Load Test: ${{ inputs.test_type }} - ${{ steps.run-test.outputs.test_passed }}"
+    #     server_address: ${{ secrets.SMTP_SERVER }}
+    #     server_port: ${{ secrets.SMTP_PORT }}
+    #     username: ${{ secrets.SMTP_USERNAME }}
+    #     password: ${{ secrets.SMTP_PASSWORD }}
+    #     subject: "Load Test: ${{ inputs.test_type }} - ${{ steps.run-test.outputs.test_passed }}"
     #     to: devops@company.com
-    #     from: load-test@company.com
-    #     html_body_file: load-test-report.html
+    #     from: ${{ secrets.SMTP_FROM }}
+    #     html_body_file: email-report.html
     #     secure: true
+
